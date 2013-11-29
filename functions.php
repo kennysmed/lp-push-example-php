@@ -1,4 +1,10 @@
 <?php
+require 'vendor/autoload.php';
+require 'config.php';
+
+use Guzzle\Http\Client;
+use Guzzle\Plugin\Oauth\OauthPlugin;
+
 
 // Should be the common directory path from the URL, eg 
 // '/lp-hello-world-php/'
@@ -16,6 +22,34 @@ $GREETINGS = array(
 	'swedish'		=> array('Hallå')
 );
 
+$DB = FALSE;
+
+function db() {
+	global $DB;
+
+	if ($DB === FALSE) {
+		$mysqli = new mysqli(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME);
+		if (mysqli_connect_errno()) {
+			printf("Connect failed: %s\n", mysqli_connect_error());
+			exit();
+		} else {
+			$DB = $mysqli;
+		}
+	}
+	return $DB;
+}
+
+function client() {
+	$client = new Client(BERGCLOUD_SITE);
+	$oauth = new OauthPlugin(array(
+		'consumer_key'    => BERGLCOUD_CONSUMER_TOKEN,
+		'consumer_secret' => BERGCLOUD_CONSUMER_TOKEN_SECRET,
+		'token'           => BERGCLOUD_ACCESS_TOKEN,
+		'token_secret'    => BERGCLOUD_ACCESS_TOKEN_SECRET
+	));
+	$client->addSubscriber($oauth);
+	return $client;
+}
 
 /**
  * == POST parameters:
@@ -94,11 +128,21 @@ function display_validate_config() {
 	if ($response['valid']) {
         // Assuming the form validates, we store the endpoint, plus this user's
         // language choice and name, keyed by their subscription_id.
-		$user_settings['endpoint'] = $_GET['endpoint'];
-		// TODO: STORE
-        //db().hset('push_example:subscriptions',
-                    //request.form.get('subscription_id'),
-                    //json.dumps(user_settings))
+		$db = db();
+		$stmt = $db->prepare("
+			INSERT INTO " . DB_TABLE_PREFIX . "subscribers
+			(subscription_id, name, language, endpoint)
+			VALUES (?, ?, ?, ?)
+		");
+		$stmt->bind_param(
+			$_GET['subscription_id'],
+			$user_settings['name'],
+			$user_settings['lang'],
+			$_GET['endpoint']
+		);
+		$stmt->execute();
+		$stmt->close();
+		$db->close();
 	}
 	/*
      * Ending the Push-specific section.
@@ -152,8 +196,45 @@ function display_push_get() {
 function display_push_post() {
 	$subscribed_count = 0;
 	$unsubscribed_count = 0;
-	# TODO. The rest of this.
 
+	$template = file_get_contents('templates/edition.php');
+
+	$db = db();
+	if ($result = $db->query("SELECT name, language, endpoint
+						FROM " . DB_TABLE_PREFIX . "subscribers")) {
+
+		$client = client();
+		while($obj = $result->fetch_object()) {
+			$greeting = array_rand($GREETINGS[$obj->language]);
+
+			$content = preg_replace('/\{\$greeting\}/', $greeting, $template);
+		
+			$request = $client->post(
+							$obj->endpoint,
+							array('Content-Type' => 'text/html; charset=utf-8'),
+							$content
+						);
+			$response = $request->send();
+
+			if ($response->getStatusCode() == '410') {
+				$stmt = $db->prepare("
+					DELETE FROM " . DB_TABLE_PREFIX . "subscribers
+					WHERE subscription_id = ?
+				");
+				$stmt->bind_param($obj->subscription_id);
+				$stmt->execute();
+				$stmt->close();
+				$unsubscribed_count += 1;
+			} else {
+				$subscribed_count += 1;
+			}
+		}
+		$result->close();
+	};
+	$db->close();
+
+	$pushed = TRUE;
+	require $_SERVER['DOCUMENT_ROOT'] . $ROOT_DIRECTORY . 'templates/push.php';
 }
 
 
