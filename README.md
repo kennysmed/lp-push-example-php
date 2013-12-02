@@ -17,8 +17,7 @@ You can use an existing MySQL database, or create a new one.
 To create a new one, either use your server's web admin system or do something like this if you've logged into mysql on the command line. You might want to change the database name, username and password from `push_example`, 'pushuser` and `password`:
 
 	CREATE DATABASE push_example CHARACTER SET utf8 COLLATE utf8_general_ci;
-	GRANT ALL ON push_example.* TO pushuser@localhost IDENTIFIED BY
-	'password';
+	GRANT ALL ON push_example.* TO pushuser@localhost IDENTIFIED BY 'password';
 	FLUSH PRIVILEGES;
 
 Then create the one table we'll need:
