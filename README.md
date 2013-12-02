@@ -50,19 +50,25 @@ For better security you should put `config.php` outside of your web root. If you
 
 ### Installing Guzzle
 
-This example uses [Guzzle](http://docs.guzzlephp.org/en/latest/index.html) to make an OAuth POST request. See its [installation instructions](http://docs.guzzlephp.org/en/latest/getting-started/installation.html) to install Guzzle using [Composer](http://getcomposer.org/). 
+This example uses [Guzzle](http://docs.guzzlephp.org/en/latest/index.html) to make an OAuth POST request. If you already have [Composer](http://getcomposer.org/) you should be able to install the required dependencies using the included `composer.json` and `composer.lock` files by doing something like:
 
-This should result in a `vendor/` directory at the same level as `functions.php` etc, with contents something like this:
+	$ composer install
+
+while in the `lp-push-example-php/` directory.
+
+Otherwise, see Guzzle's [installation instructions](http://docs.guzzlephp.org/en/latest/getting-started/installation.html).
+
+If you've installed Guzzle using Composer, this should result in a `vendor/` directory within the `lp-push-example-php/` directory, with contents something like this:
 
 	autoload.php
 	composer/
 	guzzle/
 	symfony/
 
-If you install this in a location other than a 'vendor/' directory, you'll need to change the path to `vendor/autoload.php` at the top of `functions.php`.
+If you install this in a location other than a 'vendor/' directory, you'll need to change the path to `vendor/autoload.php` at the top of the included `functions.php`.
 
-You could install this on your server, having uploaded the Push Example files,
-or on your local machine, and then upload the whole lot to your server.
+You could install Guzzle etc on your server, having uploaded the Push Example files, or on your local machine, and then upload the whole lot to your server.
+
 
 ## Run it
 
