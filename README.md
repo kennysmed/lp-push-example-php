@@ -2,6 +2,9 @@
 
 This is an example publication, written in PHP. The same example can also be seen in:
 
+* [Python](https://github.com/bergcloud/lp-push-example-python)
+* [Ruby](https://github.com/bergcloud/lp-publication-push-example)
+
 This example expands on the Hello World example, and demonstrates how to use the Push API to send messages directly to subscribed Little Printers.
 
 
