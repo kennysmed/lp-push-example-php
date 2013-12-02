@@ -1,6 +1,8 @@
 <?php
-require 'vendor/autoload.php';
+// If you've moved your config file elsewhere, change the path to it here:
 require 'config.php';
+// If you've installed Guzzle etc in a different location, change this path:
+require 'vendor/autoload.php';
 
 use Guzzle\Http\Client;
 use Guzzle\Plugin\Oauth\OauthPlugin;
@@ -22,27 +24,19 @@ $GREETINGS = array(
 	'swedish'		=> array('Hallå')
 );
 
-$DB = FALSE;
-
-function db() {
-	global $DB;
-
-	if ($DB === FALSE) {
-		$mysqli = new mysqli(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME);
-		if (mysqli_connect_errno()) {
-			printf("Connect failed: %s\n", mysqli_connect_error());
-			exit();
-		} else {
-			$DB = $mysqli;
-		}
-	}
-	return $DB;
+// Prepare our MySQL object.
+$DB = new mysqli(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME);
+if (mysqli_connect_errno()) {
+	error_log(sprintf("Connect failed: %s\n", mysqli_connect_error()));
+	printf("Connect failed: %s\n", mysqli_connect_error());
+	exit();
 }
 
+# The BERG Cloud OAuth client.
 function client() {
 	$client = new Client(BERGCLOUD_SITE);
 	$oauth = new OauthPlugin(array(
-		'consumer_key'    => BERGLCOUD_CONSUMER_TOKEN,
+		'consumer_key'    => BERGCLOUD_CONSUMER_TOKEN,
 		'consumer_secret' => BERGCLOUD_CONSUMER_TOKEN_SECRET,
 		'token'           => BERGCLOUD_ACCESS_TOKEN,
 		'token_secret'    => BERGCLOUD_ACCESS_TOKEN_SECRET
@@ -53,13 +47,13 @@ function client() {
 
 /**
  * == POST parameters:
- * :config
- *   params[:config] contains a JSON array of responses to the options defined
+ * 'config'
+ *   $_POST['config'] contains a JSON array of responses to the options defined
  *   by the fields object in meta.json. In this case, something like:
- *   params[:config] = ["name":"SomeName", "lang":"SomeLanguage"]
- * :endpoint
+ *   $_POST['config'] = {"name":"SomeName", "lang":"SomeLanguage"}
+ * 'endpoint'
  *   the URL to POST content to be printed out by Push.
- * :subscription_id
+ * 'subscription_id'
  *   a string used to identify the subscriber and their Little Printer.
  * 
  * Most of this is identical to a non-Push publication.
@@ -72,7 +66,7 @@ function client() {
  * If the parameters passed in are not valid: {"valid":false,"errors":["No name was provided"], ["The language you chose does not exist"]}
  */
 function display_validate_config() {
-	global $GREETINGS;
+	global $DB, $GREETINGS;
 
 	if (array_key_exists('config', $_POST)) {
 		$config = $_POST['config'];
@@ -115,12 +109,12 @@ function display_validate_config() {
     /************************
     * This section is Push-specific, different to a conventional publication: 
 	*/
-	if ( ! array_key_exists('endpoint', $_GET) || $_GET['endpoint'] == '') {
+	if ( ! array_key_exists('endpoint', $_POST) || $_POST['endpoint'] == '') {
 		$response['valid'] = FALSE;
 		array_push($response['errors'], "No Push endpoint was provided.");
 	}
 
-	if ( ! array_key_exists('subscription_id', $_GET) || $_GET['subscription_id'] == '') {
+	if ( ! array_key_exists('subscription_id', $_POST) || $_POST['subscription_id'] == '') {
 		$response['valid'] = FALSE;
 		array_push($response['errors'], "No Push subscription_id was provided.");
 	}
@@ -128,21 +122,20 @@ function display_validate_config() {
 	if ($response['valid']) {
         // Assuming the form validates, we store the endpoint, plus this user's
         // language choice and name, keyed by their subscription_id.
-		$db = db();
-		$stmt = $db->prepare("
+		$stmt = $DB->prepare("
 			INSERT INTO " . DB_TABLE_PREFIX . "subscribers
 			(subscription_id, name, language, endpoint)
 			VALUES (?, ?, ?, ?)
 		");
-		$stmt->bind_param(
-			$_GET['subscription_id'],
+		$stmt->bind_param('ssss',
+			$_POST['subscription_id'],
 			$user_settings['name'],
 			$user_settings['lang'],
-			$_GET['endpoint']
+			$_POST['endpoint']
 		);
 		$stmt->execute();
 		$stmt->close();
-		$db->close();
+		$DB->close();
 	}
 	/*
      * Ending the Push-specific section.
@@ -165,10 +158,15 @@ function display_sample() {
 	
 	$greeting = sprintf('%s, %s', $GREETINGS[$language][0], $name);
 
+	// Load the template's contents and replace the '{$greeting}' token
+	// with our greeting text.
+	$template = file_get_contents($_SERVER['DOCUMENT_ROOT'] . $ROOT_DIRECTORY . 'templates/edition.php');
+	$content = preg_replace('/\{\$greeting\}/', $greeting, $template);
+
 	// Set the ETag to match the content.
 	header("Content-Type: text/html; charset=utf-8");
 	header('ETag: "' . md5($language . $name . gmdate('dmY')) . '"');
-	require $_SERVER['DOCUMENT_ROOT'] . $ROOT_DIRECTORY . 'templates/edition.php';
+	print $content;
 }
 
 
@@ -188,51 +186,68 @@ function display_push() {
  * A button to press to send print events to subscribed Little Printers.
  */
 function display_push_get() {
+	global $ROOT_DIRECTORY;
+
 	$pushed = FALSE;
 	require $_SERVER['DOCUMENT_ROOT'] . $ROOT_DIRECTORY . 'templates/push.php';
 }
 
 
 function display_push_post() {
+	global $DB, $GREETINGS, $ROOT_DIRECTORY;
+
 	$subscribed_count = 0;
 	$unsubscribed_count = 0;
 
-	$template = file_get_contents('templates/edition.php');
+	$template = file_get_contents($_SERVER['DOCUMENT_ROOT'] . $ROOT_DIRECTORY . 'templates/edition.php');
 
-	$db = db();
-	if ($result = $db->query("SELECT name, language, endpoint
+	// Get all of our subscribers' data from the database.
+	if ($result = $DB->query("SELECT name, language, endpoint
 						FROM " . DB_TABLE_PREFIX . "subscribers")) {
 
 		$client = client();
 		while($obj = $result->fetch_object()) {
-			$greeting = array_rand($GREETINGS[$obj->language]);
+			// $obj contains the subscriber's language, name, subscription_id
+			// and endpoint.
+			$idx = array_rand($GREETINGS[$obj->language]);
+			
+			// Get a random greeting in this subscriber's chosen language.
+			$greeting = sprintf("%s, %s",
+								$GREETINGS[$obj->language][$idx], $obj->name);
 
+			// Make the HTML content to push to the printer.
 			$content = preg_replace('/\{\$greeting\}/', $greeting, $template);
 		
-			$request = $client->post(
+			try {
+				// Post this content to BERG Cloud using OAuth.
+				$response = $client->post(
 							$obj->endpoint,
 							array('Content-Type' => 'text/html; charset=utf-8'),
 							$content
-						);
-			$response = $request->send();
-
-			if ($response->getStatusCode() == '410') {
-				$stmt = $db->prepare("
-					DELETE FROM " . DB_TABLE_PREFIX . "subscribers
-					WHERE subscription_id = ?
-				");
-				$stmt->bind_param($obj->subscription_id);
-				$stmt->execute();
-				$stmt->close();
-				$unsubscribed_count += 1;
-			} else {
+						)->send();
 				$subscribed_count += 1;
+
+			} catch (Guzzle\Http\Exception\BadResponseException $e) {
+				if ($e->getResponse()->getStatusCode() == 410) {
+					// By sending a 410 status code, BERG Cloud has informed us
+					// this user has unsubscribed. So delete their subscription
+					// from our database.
+					$stmt = $DB->prepare("
+						DELETE FROM " . DB_TABLE_PREFIX . "subscribers
+						WHERE subscription_id = ?
+					");
+					$stmt->bind_param('s', $obj->subscription_id);
+					$stmt->execute();
+					$stmt->close();
+					$unsubscribed_count += 1;
+				}
 			}
 		}
 		$result->close();
 	};
-	$db->close();
+	$DB->close();
 
+    // Show the same form again, with a message to confirm this worked.
 	$pushed = TRUE;
 	require $_SERVER['DOCUMENT_ROOT'] . $ROOT_DIRECTORY . 'templates/push.php';
 }

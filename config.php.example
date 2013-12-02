@@ -1,0 +1,17 @@
+<?php
+
+define('BERGCLOUD_CONSUMER_TOKEN', 'yourConsumerToken');
+define('BERGCLOUD_CONSUMER_TOKEN_SECRET', 'yourConsumerTokenSecret');
+define('BERGCLOUD_ACCESS_TOKEN', 'yourAccessToken');
+define('BERGCLOUD_ACCESS_TOKEN_SECRET', 'yourAccessTokenSecret');
+define('BERGCLOUD_SITE', 'http://api.bergcloud.com');
+
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'yourDBname');
+define('DB_USER', 'db-username');
+define('DB_PASSWORD', 'password');
+
+// eg 'push_', or leave as ''.
+define('DB_TABLE_PREFIX', '');
+
+?>
