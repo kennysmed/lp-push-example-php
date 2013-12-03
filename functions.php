@@ -15,12 +15,12 @@ $ROOT_DIRECTORY = preg_replace(
 
 // Define greetings for different times of the day in different languages.
 $GREETINGS = array( 
-	'english'		=> array('Hello', 'Hi'), 
-	'french'		=> array('Salut'), 
-	'german'		=> array('Hallo', 'Tag'), 
-	'spanish'		=> array('Hola'), 
-	'portuguese'	=> array('Olá'), 
-	'italian'		=> array('Ciao'), 
+	'english'		=> array('Hello', 'Hi'),
+	'french'		=> array('Salut'),
+	'german'		=> array('Hallo', 'Tag'),
+	'spanish'		=> array('Hola'),
+	'portuguese'	=> array('Olá'),
+	'italian'		=> array('Ciao'),
 	'swedish'		=> array('Hallå')
 );
 
@@ -32,7 +32,16 @@ if (mysqli_connect_errno()) {
 	exit();
 }
 
-# The BERG Cloud OAuth client.
+/**
+ * The BERG Cloud OAuth client.
+ * Use something like:
+ * $client = client();
+ * $response = $client->post(
+ *				url,
+ *				array('Content-Type' => 'text/html; charset=utf-8'),
+ *				'Hello'
+ *			)->send();
+ */
 function client() {
 	$client = new Client(BERGCLOUD_SITE);
 	$oauth = new OauthPlugin(array(
@@ -107,8 +116,8 @@ function display_validate_config() {
 	}
 	
     /************************
-    * This section is Push-specific, different to a conventional publication: 
-	*/
+     * This section is Push-specific, different to a conventional publication: 
+	 */
 	if ( ! array_key_exists('endpoint', $_POST) || $_POST['endpoint'] == '') {
 		$response['valid'] = FALSE;
 		array_push($response['errors'], "No Push endpoint was provided.");
@@ -120,8 +129,8 @@ function display_validate_config() {
 	}
 
 	if ($response['valid']) {
-        // Assuming the form validates, we store the endpoint, plus this user's
-        // language choice and name, keyed by their subscription_id.
+		// Assuming the form validates, we store the endpoint, plus this user's
+		// language choice and name, keyed by their subscription_id.
 		$stmt = $DB->prepare("
 			INSERT INTO " . DB_TABLE_PREFIX . "subscribers
 			(subscription_id, name, language, endpoint)
@@ -193,19 +202,26 @@ function display_push_get() {
 }
 
 
+/**
+ * When the button is pressed, this happens.
+ * Push a greeting to all subscribed Little Printers.
+ */
 function display_push_post() {
 	global $DB, $GREETINGS, $ROOT_DIRECTORY;
 
 	$subscribed_count = 0;
 	$unsubscribed_count = 0;
 
-	$template = file_get_contents($_SERVER['DOCUMENT_ROOT'] . $ROOT_DIRECTORY . 'templates/edition.php');
-
 	// Get all of our subscribers' data from the database.
 	if ($result = $DB->query("SELECT name, language, endpoint
-						FROM " . DB_TABLE_PREFIX . "subscribers")) {
+								FROM " . DB_TABLE_PREFIX . "subscribers")) {
 
+		// Get the contents of the template for the page we'll send to subscribers.
+		$template = file_get_contents($_SERVER['DOCUMENT_ROOT'] . $ROOT_DIRECTORY . 'templates/edition.php');
+
+		// The OAuth client.
 		$client = client();
+
 		while($obj = $result->fetch_object()) {
 			// $obj contains the subscriber's language, name, subscription_id
 			// and endpoint.
@@ -247,7 +263,7 @@ function display_push_post() {
 	};
 	$DB->close();
 
-    // Show the same form again, with a message to confirm this worked.
+	// Show the same form again, with a message to confirm this worked.
 	$pushed = TRUE;
 	require $_SERVER['DOCUMENT_ROOT'] . $ROOT_DIRECTORY . 'templates/push.php';
 }
